@@ -242,14 +242,24 @@ function loadHighscores() {
   try {
     const raw = localStorage.getItem(HIGHSCORES_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    // Discard malformed/corrupted entries so a bad localStorage value
+    // can never crash endGame()/init() downstream.
+    return parsed.filter(
+      e => e && typeof e.name === 'string' && typeof e.score === 'number' && Number.isFinite(e.score)
+    );
   } catch {
     return [];
   }
 }
 
 function saveHighscoresList(list) {
-  localStorage.setItem(HIGHSCORES_KEY, JSON.stringify(list));
+  try {
+    localStorage.setItem(HIGHSCORES_KEY, JSON.stringify(list));
+  } catch {
+    // Storage unavailable (private mode, quota exceeded, etc.) - the
+    // in-memory render still works, we just can't persist it.
+  }
 }
 
 function loadStats() {
@@ -266,7 +276,12 @@ function loadStats() {
 }
 
 function saveStats(stats) {
-  localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  try {
+    localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  } catch {
+    // Storage unavailable (private mode, quota exceeded, etc.) - ignore
+    // so a failed write never blocks showing the game-over overlay.
+  }
 }
 
 function renderHighscores(container, highlightIndex) {
@@ -347,12 +362,30 @@ function saveHighscoreEntry() {
 }
 
 function resetHighscores() {
-  if (!confirm('¿Seguro que quieres borrar todos los récords y estadísticas?')) return;
-  localStorage.removeItem(HIGHSCORES_KEY);
-  localStorage.removeItem(STATS_KEY);
-  renderHighscores(highscoresPanelEl);
-  if (!overlay.classList.contains('hidden')) {
-    renderHighscores(overlayHighscoresEl);
+  // confirm() blocks the main thread; if a game is actively running,
+  // freeze the loop first so the huge elapsed-time delta produced by
+  // the blocked frame doesn't slam the current piece down on resume.
+  const wasRunning = !paused && !gameOver;
+  if (wasRunning) cancelAnimationFrame(animId);
+
+  const confirmed = confirm('¿Seguro que quieres borrar todos los récords y estadísticas?');
+  if (confirmed) {
+    try {
+      localStorage.removeItem(HIGHSCORES_KEY);
+      localStorage.removeItem(STATS_KEY);
+    } catch {
+      // Storage unavailable - nothing to clean up, ignore.
+    }
+    renderHighscores(highscoresPanelEl);
+    if (!overlay.classList.contains('hidden')) {
+      renderHighscores(overlayHighscoresEl);
+    }
+  }
+
+  if (wasRunning) {
+    lastTime = performance.now();
+    dropAccum = 0;
+    animId = requestAnimationFrame(loop);
   }
 }
 
@@ -396,7 +429,10 @@ function togglePause() {
     cancelAnimationFrame(animId);
     overlayTitle.textContent = 'PAUSA';
     overlayScore.textContent = '';
-    hideHighscoreForm();
+    // Neither the name form nor the highscores table belong on the
+    // pause screen; hide both directly (not via hideHighscoreForm(),
+    // which would show the table right before we hide it again).
+    highscoreFormEl.classList.add('hidden');
     overlayHighscoresEl.classList.add('hidden');
     overlay.classList.remove('hidden');
   }
