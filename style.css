@@ -150,6 +150,30 @@ body {
   border-radius: 4px;
 }
 
+/* ---- Selector de skin ---- */
+#skin-select {
+  background: var(--kbd-bg);
+  border: 1px solid var(--kbd-border);
+  border-radius: 6px;
+  color: var(--kbd-text);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 6px 8px;
+  transition: background 0.15s, color 0.15s;
+}
+
+#skin-select:hover {
+  background: var(--btn-hover-bg);
+  color: var(--btn-text);
+}
+
+/* ---- Skin: neon (fondo del tablero siempre oscuro) ---- */
+body.skin-neon #board,
+body.skin-neon #next-canvas {
+  --board-bg: #05050c;
+  --board-shadow: rgba(0, 229, 255, 0.35);
+}
+
 /* ---- Controles ---- */
 .controls ul {
   list-style: none;
